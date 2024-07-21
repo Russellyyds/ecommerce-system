@@ -28,7 +28,7 @@ class Sample:
             access_key_secret=os.getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
         )
         # Endpoint 请参考 https://api.aliyun.com/product/Dysmsapi
-        config.endpoint = f'dysmsapi.aliyuncs.com'
+        config.endpoint = f'xxxxxx.com'
         return Dysmsapi20170525Client(config)
 
     @staticmethod
@@ -37,8 +37,8 @@ class Sample:
     ):
         client = Sample.create_client()
         send_sms_request = dysmsapi_20170525_models.SendSmsRequest(
-            sign_name='我的AI学院在线教育网站',
-            template_code='SMS_462045617',
+            sign_name='xxxxxx',
+            template_code='xxxxx',
             phone_numbers=phone_number,
             template_param=json.dumps({"code": code})
         )
