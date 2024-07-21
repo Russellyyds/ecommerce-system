@@ -1,17 +1,25 @@
+import os
+import random
 from tokenize import TokenError
 
-from django.shortcuts import render
-from rest_framework import status
+from django.http import FileResponse
+from rest_framework import status, mixins
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
-from rest_framework.viewsets import ViewSet
+from rest_framework.viewsets import GenericViewSet
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 import re
 
-from users.models import User
+from common.aliyun_message import Sample
+from djangoProject3.settings import MEDIA_ROOT
+from users.models import User, Address, VerifCode
+from .permission import UserPermission, AddrPermission
+from .serializers import UserSerializer, AddrSerializer
+from rest_framework.permissions import IsAuthenticated
 
 
 # Create your views here.
@@ -76,3 +84,105 @@ class Register(APIView):
             "email": user.email
         }
         return Response(res, status.HTTP_201_CREATED)
+
+
+class UserDetails(GenericViewSet, mixins.RetrieveModelMixin):
+    # setting authentication
+    permission_classes = [IsAuthenticated, UserPermission]
+    """User Details Operation's ViewSet."""
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def upload_avatar(self, request, *args, **kwargs):
+
+        """upload user avatar"""
+        avatar_url = request.data.get("avatar_url")
+        print(avatar_url)
+        if not avatar_url:
+            return Response({"error": "upload failed,cannot be null"}, status.HTTP_400_BAD_REQUEST)
+        size = avatar_url.size
+        if size > 1024 * 300:
+            return Response({"error": "upload failed, cannot be larger than 300kb"}, status.HTTP_400_BAD_REQUEST)
+        # save file
+        user = self.get_object()
+        print(user)
+        # gain serialization object
+        serializer = self.get_serializer(user, data={"avatar": avatar_url}, partial=True)
+        # verify
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"url": serializer.data["avatar"]}, status.HTTP_200_OK)
+
+
+class FileView(APIView):
+    def get(self, request, file_url):
+        print(file_url)
+        path = MEDIA_ROOT / file_url
+        print(path)
+        if not os.path.exists(path):
+            return Response({"error": "file not exist"}, status.HTTP_400_BAD_REQUEST)
+        return FileResponse(open(path, 'rb'), status.HTTP_200_OK)
+        # return Response({"msg": "success"}, status.HTTP_200_OK)
+
+
+class AddrView(GenericViewSet,
+               mixins.ListModelMixin,
+               mixins.CreateModelMixin,
+               mixins.DestroyModelMixin,
+               mixins.UpdateModelMixin):
+    queryset = Address.objects.all()
+    serializer_class = AddrSerializer
+    permission_classes = [IsAuthenticated, AddrPermission]
+
+    # config field filter
+    # filterset_fields = ("user",)
+    def list(self, request, *args, **kwargs):
+        print(request.user)
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.filter(user=request.user)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def set_default_addr(self, request, *args, **kwargs):
+        """setting default delivery address"""
+        obj = self.get_object()
+        obj.is_default = True
+        obj.save()
+
+        queryset = self.get_queryset().filter(user=request.user)
+        for i in queryset:
+            if i != obj:
+                i.is_default = False
+                i.save()
+        return Response({"msg": "setting successfully"}, status.HTTP_200_OK)
+
+
+class SendSMSView(APIView):
+    throttle_classes = (AnonRateThrottle,)
+
+    def post(self, request):
+        mobile = request.data.get("mobile", "")
+        if not re.match(r"^1[35678]\d{9}$", mobile):
+            return Response({"error": "mobile number must be legal"}, status.HTTP_400_BAD_REQUEST)
+        code = self.get_random_code()
+        result = Sample.main(mobile, code)
+        print(result)
+        if result["code"] == "OK":
+            obj = VerifCode.objects.create(mobile=mobile, code=code)
+            result["codeID"] = obj.id
+            return Response(result, status.HTTP_200_OK)
+        else:
+            return Response(result, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # return Response({"msg": "success send message code"}, status.HTTP_200_OK)
+
+    def get_random_code(self):
+        code = ''
+        for i in range(6):
+            n = random.choice(range(9))
+            code += str(n)
+        return code

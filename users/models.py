@@ -27,8 +27,8 @@ class Address(models.Model):
     name = models.CharField(max_length=20, verbose_name="User Name")
     province = models.CharField(max_length=20, verbose_name="Province")
     city = models.CharField(max_length=20, verbose_name="City")
-    country = models.CharField(max_length=20, verbose_name="Country")
-    address = models.CharField(max_length=200, verbose_name="Address")  # more details
+    county = models.CharField(max_length=20, verbose_name="County", default="")
+    address = models.CharField(max_length=200, verbose_name="Address", default="")  # more details
     is_default = models.BooleanField(verbose_name="Default Address", default=False)
 
     class Meta:

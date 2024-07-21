@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'orders',
     'goods',
     'cart',
+    'django_filters'
 ]
 
 MIDDLEWARE = [
@@ -146,7 +147,14 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication'
-    )
+    ),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ),
+    #Configure the throttling rules
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': "1/minute",
+    }
 }
 
 # JWT配置
@@ -215,3 +223,6 @@ SIMPLE_JWT = {
 AUTHENTICATION_BACKENDS = [
     'common.authenticate.MyBackend',
 ]
+
+MEDIA_ROOT = BASE_DIR / 'file/image'
+MEDIA_URL = 'file/image/'
